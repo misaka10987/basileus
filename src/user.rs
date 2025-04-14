@@ -9,6 +9,9 @@ pub fn check_username(user: &str) -> bool {
     if user == ROOT_USER {
         return false;
     }
+    if user.is_empty() {
+        return false;
+    }
     user.chars()
         .all(|c| c.is_ascii_graphic() && !c.is_whitespace())
 }
