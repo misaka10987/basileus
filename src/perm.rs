@@ -48,7 +48,7 @@ impl Perm {
     }
 
     /// Inherit permission from another entity. Root permission can **NOT** be inherited.
-    pub fn inherit(&self, from: Perm) -> Self {
+    pub fn inherit(&self, from: &Perm) -> Self {
         match (self, from) {
             (Self::Root, _) => Self::Root,
             (Self::Group(lhs), Perm::Root) => Self::Group(lhs.clone()),
@@ -185,7 +185,7 @@ pub trait PermManage {
     /// Get all permission the user holds. This operation is expensive, consider using [`PermManage::get_direct_perm`].
     async fn get_all_perm(&self, user: &str) -> Result<Perm, GetPermError>;
     /// Check if the user has specified permission.
-    async fn check_perm(&self, user: &str, perm: Perm) -> Result<bool, CheckPermError>;
+    async fn check_perm(&self, user: &str, perm: &Perm) -> Result<bool, CheckPermError>;
     /// Sets a user's permission.
     async fn set_perm(&self, user: &str, perm: Perm) -> Result<(), SetPermError>;
     /// Gives new permissions to specified user.
@@ -221,7 +221,7 @@ where
             let mut parent = perm.clone();
             for grp in perm.grps() {
                 let new = self.get_direct_perm(grp).await?;
-                parent = parent.inherit(new);
+                parent = parent.inherit(&new);
             }
             if parent.grp_cnt() == perm.grp_cnt() {
                 break Ok(parent);
@@ -230,7 +230,7 @@ where
         }
     }
 
-    async fn check_perm(&self, user: &str, req: Perm) -> Result<bool, CheckPermError> {
+    async fn check_perm(&self, user: &str, req: &Perm) -> Result<bool, CheckPermError> {
         if user == ROOT_USER {
             return Ok(true);
         }
@@ -238,11 +238,11 @@ where
             return Err(CheckPermError::UserNotExist(user.into()));
         }
         let perm = self.get_direct_perm(user).await?;
-        if perm >= req {
+        if perm >= *req {
             return Ok(true);
         }
         let perm = self.get_all_perm(user).await?;
-        Ok(perm >= req)
+        Ok(perm >= *req)
     }
 
     async fn set_perm(&self, user: &str, perm: Perm) -> Result<(), SetPermError> {
