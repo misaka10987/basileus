@@ -200,6 +200,9 @@ where
     T: AsRef<SqlitePool> + UserManage,
 {
     async fn get_direct_perm(&self, user: &str) -> Result<Perm, GetPermError> {
+        if user == ROOT_USER {
+            return Ok(Perm::Root);
+        }
         if !self.exist_user(user).await? {
             return Err(GetPermError::UserNotExist(user.into()));
         }
@@ -228,6 +231,9 @@ where
     }
 
     async fn check_perm(&self, user: &str, req: Perm) -> Result<bool, CheckPermError> {
+        if user == ROOT_USER {
+            return Ok(true);
+        }
         if !self.exist_user(user).await? {
             return Err(CheckPermError::UserNotExist(user.into()));
         }
