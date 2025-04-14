@@ -47,7 +47,10 @@ where
 
     async fn create_user(&self, user: &str) -> Result<(), CreateUserError> {
         if self.exist_user(user).await? {
-            return Err(CreateUserError::UserAlreadyExist(user.to_owned()));
+            return Err(CreateUserError::UserAlreadyExist(user.into()));
+        }
+        if !check_username(user) {
+            return Err(CreateUserError::InvalidName(user.into()));
         }
         let q = query("INSERT INTO user (user) VALUES (?);").bind(user);
         q.execute(self.as_ref()).await?;

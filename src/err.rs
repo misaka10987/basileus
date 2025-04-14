@@ -6,6 +6,8 @@ pub enum CreateUserError {
     SQL(#[from] sqlx::error::Error),
     #[error("user '{0}' already exists")]
     UserAlreadyExist(String),
+    #[error("invalid username '{0}'")]
+    InvalidName(String),
 }
 
 #[derive(Debug, Error)]
