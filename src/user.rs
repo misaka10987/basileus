@@ -3,12 +3,7 @@ use sqlx::{SqlitePool, query, query_as};
 
 use tracing::info;
 
-pub const ROOT_USER: &str = "root";
-
 pub fn check_username(user: &str) -> bool {
-    if user == ROOT_USER {
-        return false;
-    }
     if user.is_empty() {
         return false;
     }
