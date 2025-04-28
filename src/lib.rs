@@ -46,9 +46,9 @@ pub struct Basileus {
     token: TokenModule,
 }
 
-impl AsRef<SqlitePool> for Basileus {
-    fn as_ref(&self) -> &SqlitePool {
-        &self.db
+impl AsRef<Basileus> for Basileus {
+    fn as_ref(&self) -> &Basileus {
+        self
     }
 }
 

@@ -1,8 +1,9 @@
 use crate::{
+    Basileus,
     err::{CheckPermError, GetPermError, GivePermError, RevokePermError, SetPermError},
     user::UserManage,
 };
-use sqlx::{SqlitePool, query, query_as};
+use sqlx::{query, query_as};
 use std::{
     collections::HashSet,
     convert::Infallible,
@@ -142,14 +143,14 @@ pub trait PermManage {
 
 impl<T> PermManage for T
 where
-    T: AsRef<SqlitePool> + UserManage,
+    T: AsRef<Basileus> + UserManage,
 {
     async fn get_perm(&self, user: &str) -> Result<Perm, GetPermError> {
         if !self.exist_user(user).await? {
             return Err(GetPermError::UserNotExist(user.into()));
         }
         let query = query_as("SELECT grp FROM perm WHERE user = ?").bind(user);
-        let (res,): (String,) = query.fetch_one(self.as_ref()).await?;
+        let (res,): (String,) = query.fetch_one(&self.as_ref().db).await?;
         let perm = res.into();
         Ok(perm)
     }
@@ -170,7 +171,7 @@ where
         let query = query("INSERT OR REPLACE INTO perm (user, grp) VALUES (?, ?);")
             .bind(user)
             .bind(grp);
-        query.execute(self.as_ref()).await?;
+        query.execute(&self.as_ref().db).await?;
         Ok(())
     }
 

@@ -1,7 +1,7 @@
-use crate::{err::DeletePassError, rand_buf, user::UserManage};
+use crate::{Basileus, err::DeletePassError, rand_buf, user::UserManage};
 
 use super::err::{UpdatePassError, VerifyPassError};
-use sqlx::{SqlitePool, query, query_as};
+use sqlx::{query, query_as};
 
 use tracing::{info, trace};
 
@@ -29,11 +29,11 @@ pub trait PassManage {
 
 impl<T> PassManage for T
 where
-    T: AsRef<SqlitePool> + UserManage,
+    T: AsRef<Basileus> + UserManage,
 {
     async fn exist_pass(&self, user: &str) -> Result<bool, sqlx::error::Error> {
         let query = query_as("SELECT EXISTS(SELECT 1 FROM pass WHERE user = ?)").bind(user);
-        let (res,): (i32,) = query.fetch_one(self.as_ref()).await?;
+        let (res,): (i32,) = query.fetch_one(&self.as_ref().db).await?;
         Ok(res == 1)
     }
 
@@ -45,7 +45,7 @@ where
         let query = query("INSERT OR REPLACE INTO pass (user, phc) VALUES (?, ?);")
             .bind(user)
             .bind(hashed);
-        query.execute(self.as_ref()).await?;
+        query.execute(&self.as_ref().db).await?;
         info!("updated password for {user}");
         Ok(())
     }
@@ -58,7 +58,7 @@ where
             return Err(VerifyPassError::PassUndefined(user.into()));
         }
         let query = query_as("SELECT phc FROM pass WHERE user = ?").bind(user);
-        let (phc,): (String,) = query.fetch_one(self.as_ref()).await?;
+        let (phc,): (String,) = query.fetch_one(&self.as_ref().db).await?;
         let res = argon2::verify_encoded(&phc, pass.as_bytes())?;
         trace!("authorized {user} by password");
         Ok(res)
@@ -72,7 +72,7 @@ where
             return Err(DeletePassError::UserNotExist(user.into()));
         }
         let query = query("DELETE FROM pass WHERE user = ?").bind(user);
-        query.execute(self.as_ref()).await?;
+        query.execute(&self.as_ref().db).await?;
         Ok(())
     }
 }

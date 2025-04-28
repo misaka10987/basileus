@@ -4,7 +4,7 @@ use std::{
     time::{Duration, SystemTime},
 };
 
-use crate::rand_buf;
+use crate::{Basileus, rand_buf};
 use base64::{Engine, prelude::BASE64_STANDARD};
 
 use tracing::{debug, trace};
@@ -36,12 +36,13 @@ pub trait TokenManage {
 
 impl<T> TokenManage for T
 where
-    T: AsRef<TokenModule>,
+    T: AsRef<Basileus>,
 {
     fn issue_token(&self, user: &str) -> String {
         let buf = rand_buf::<64>();
         let token = BASE64_STANDARD.encode(buf);
         self.as_ref()
+            .token
             .store
             .write()
             .unwrap()
@@ -51,12 +52,13 @@ where
     }
 
     fn invalidate_token(&self, token: &str) {
-        self.as_ref().store.write().unwrap().remove(token);
+        self.as_ref().token.store.write().unwrap().remove(token);
         trace!("invalidated token '{}'", token);
     }
 
     fn invalidate_user_token(&self, user: &str) {
         self.as_ref()
+            .token
             .store
             .write()
             .unwrap()
@@ -65,7 +67,7 @@ where
     }
 
     fn expire_token(&self, duration: Duration) {
-        let mut token = self.as_ref().store.write().unwrap();
+        let mut token = self.as_ref().token.store.write().unwrap();
         let prev = token.len();
         token.retain(|_, (_, time)| {
             SystemTime::now()
@@ -77,7 +79,7 @@ where
     }
 
     fn verify_token(&self, token: &str) -> Option<String> {
-        let map = self.as_ref().store.read().unwrap();
+        let map = self.as_ref().token.store.read().unwrap();
         let res = map.get(token).map(|(user, _)| user.clone());
         if let Some(user) = &res {
             trace!("authorized {user} by token")

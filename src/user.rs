@@ -1,5 +1,7 @@
+use crate::Basileus;
+
 use super::err::{CreateUserError, DeleteUserError};
-use sqlx::{SqlitePool, query, query_as};
+use sqlx::{query, query_as};
 
 use tracing::info;
 
@@ -32,11 +34,11 @@ pub trait UserManage {
 
 impl<T> UserManage for T
 where
-    T: AsRef<SqlitePool>,
+    T: AsRef<Basileus>,
 {
     async fn exist_user(&self, user: &str) -> Result<bool, sqlx::error::Error> {
         let query = query_as("SELECT EXISTS(SELECT 1 FROM user WHERE user = ?)").bind(user);
-        let (res,): (i32,) = query.fetch_one(self.as_ref()).await?;
+        let (res,): (i32,) = query.fetch_one(&self.as_ref().db).await?;
         Ok(res == 1)
     }
 
@@ -48,7 +50,7 @@ where
             return Err(CreateUserError::InvalidName(user.into()));
         }
         let q = query("INSERT INTO user (user) VALUES (?);").bind(user);
-        q.execute(self.as_ref()).await?;
+        q.execute(&self.as_ref().db).await?;
         info!("created user {user}");
         Ok(())
     }
@@ -58,7 +60,7 @@ where
             return Err(DeleteUserError::UserNotExist(user.into()));
         }
         let query = query("DELETE FROM user WHERE user = ?").bind(user);
-        query.execute(self.as_ref()).await?;
+        query.execute(&self.as_ref().db).await?;
         info!("deleted user {user}");
         Ok(())
     }
