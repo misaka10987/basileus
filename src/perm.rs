@@ -48,19 +48,15 @@ impl DerefMut for Perm {
 
 impl PartialOrd for Perm {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        if self.is_subset(other) {
-            Some(std::cmp::Ordering::Less)
-        } else if self == other {
+        if self == other {
             Some(std::cmp::Ordering::Equal)
-        } else {
+        } else if self.is_subset(other) {
+            Some(std::cmp::Ordering::Less)
+        } else if self.is_superset(other) {
             Some(std::cmp::Ordering::Greater)
+        } else {
+            None
         }
-    }
-}
-
-impl Ord for Perm {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.partial_cmp(other).unwrap()
     }
 }
 
@@ -102,7 +98,11 @@ impl From<&String> for Perm {
 
 impl From<&str> for Perm {
     fn from(value: &str) -> Self {
-        let grp: HashSet<_> = value.split_whitespace().map(|x| x.into()).collect();
+        let grp: HashSet<_> = value
+            .split_whitespace()
+            .filter(|s| !s.is_empty())
+            .map(|x| x.into())
+            .collect();
         Self(grp)
     }
 }
