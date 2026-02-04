@@ -46,18 +46,6 @@ pub struct Basileus {
     token: TokenModule,
 }
 
-impl AsRef<Basileus> for Basileus {
-    fn as_ref(&self) -> &Basileus {
-        self
-    }
-}
-
-impl AsRef<TokenModule> for Basileus {
-    fn as_ref(&self) -> &TokenModule {
-        &self.token
-    }
-}
-
 /// Initialize the database.
 pub const DB_INIT: &str = r#"
 CREATE TABLE IF NOT EXISTS pubkey (
