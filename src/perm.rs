@@ -26,10 +26,33 @@ BEGIN
 END;
 "#;
 
-/// Denotes a permission level.
+/// Denotes a specific set of permissions.
+///
+/// A **"permission"** is a string excluding whitespace representing a certain privilege to a resource or action,
+/// some examples of which include "read", "write", and "admin".
+/// This is similar to user groups in Unix-like systems.
+///
+/// The set of permissions is a collection of such strings and is string-representable as whitespace-separated values.
+/// It is implemented as a wrapper over `HashSet<String>`,
+/// and supports set operations such as union, intersection, and difference (using arithmetic operators `+`, `*`, and `-` respectively).
+///
+/// # Comparison
+///
+/// The comparison operators are defined as set relations as follows:
+///
+/// - `==` : equality of two permission sets
+/// - `<`  : proper subset
+/// - `<=` : subset
+/// - `>`  : proper superset
+/// - `>=` : superset
+///
+/// Note that this is therefore a partial order because sets may be incomparable.
+///
+/// This can be used to check if a user has sufficient permissions for a certain action.
+/// E.g., if `user_perm >= required_perm`, then the user has enough permissions to perform the action requiring `required_perm`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct Perm(pub HashSet<String>);
+pub struct Perm(HashSet<String>);
 
 impl Deref for Perm {
     type Target = HashSet<String>;
