@@ -1,6 +1,6 @@
 [package]
 name = "basileus"
-version = "0.1.5"
+version = "0.2.0"
 edition = "2024"
 authors = ["misaka10987 <misaka10987@outlook.com>"]
 description = "All-in-one library for user management, authorization, sessions and permission management"
@@ -12,10 +12,10 @@ keywords = ["basileus", "user", "permission", "authorization", "database"]
 license = "MIT"
 
 [dependencies]
-sqlx = { version = "0.8.3", features = ["sqlite"], default-features = false }
-thiserror = "2.0.12"
-getrandom = "0.3.2"
+sqlx = { version = "0.8.6", features = ["sqlite"], default-features = false }
+thiserror = "2.0.18"
+getrandom = "0.4.1"
 base64 = "0.22.1"
-rust-argon2 = "2.1.0"
-tracing = "0.1.41"
-serde = { version = "1.0.219", features = ["derive"], optional = true }
+rust-argon2 = "3.0.0"
+tracing = "0.1.44"
+serde = { version = "1.0.228", features = ["derive"], optional = true }
