@@ -1,43 +1,68 @@
-use std::{collections::HashMap, fmt::Display, sync::Mutex};
+use std::{collections::HashMap, fmt::Display, sync::Mutex, time::Instant};
 
 use base64::{Engine, prelude::BASE64_URL_SAFE};
 use sha2::{Digest, Sha256};
 
 use crate::{
     Basileus,
-    err::{BeginPkceError, VerifyPkceError},
+    err::{PkceAuthError, PkceTokenError},
 };
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Pkce {
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct CodeChallenge {
     /// Base64URL-encoded [code challenge](https://datatracker.ietf.org/doc/html/rfc7636#section-4.2).
-    pub code_challenge: String,
+    #[cfg_attr(feature = "serde", serde(rename = "code_challenge"))]
+    pub challenge: String,
     /// The code challenge method, **must** be "S256".
-    pub code_challenge_method: String,
+    #[cfg_attr(feature = "serde", serde(rename = "code_challenge_method"))]
+    pub method: String,
 }
 
-impl Pkce {
-    pub fn new(code_challenge: String) -> Self {
+impl CodeChallenge {
+    pub fn new(challenge: String) -> Self {
         Self {
-            code_challenge,
-            code_challenge_method: "S256".into(),
+            challenge,
+            method: "S256".into(),
         }
+    }
+
+    pub fn verify(&self, code_verifier: &str) -> bool {
+        let hash = Sha256::digest(code_verifier);
+        let encoded = BASE64_URL_SAFE.encode(hash);
+        self.challenge == encoded
     }
 }
 
-impl Display for Pkce {
+impl Display for CodeChallenge {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "PKCE {}:{}",
-            self.code_challenge_method, self.code_challenge
-        )
+        write!(f, "PKCE {}:{}", self.method, self.challenge)
+    }
+}
+
+pub struct Pkce {
+    pub user: String,
+    pub code_challenge: CodeChallenge,
+    pub begin: Instant,
+}
+
+impl Pkce {
+    pub fn new(user: String, code_challenge: CodeChallenge) -> Self {
+        Self {
+            user,
+            code_challenge,
+            begin: Instant::now(),
+        }
+    }
+
+    pub fn valid(&self) -> bool {
+        self.begin.elapsed().as_secs() <= 600
     }
 }
 
 pub struct PkceModule {
     /// Map from PKCE challenges to their beloinging users.
-    pending: Mutex<HashMap<Pkce, String>>,
+    pending: Mutex<HashMap<String, Pkce>>,
 }
 
 impl PkceModule {
@@ -49,33 +74,47 @@ impl PkceModule {
 }
 
 impl Basileus {
-    pub async fn begin_pkce(
+    pub async fn pkce_auth_req(
         &self,
         user: &str,
         pass: &str,
-        pkce: Pkce,
-    ) -> Result<(), BeginPkceError> {
+        code_challenge: CodeChallenge,
+    ) -> Result<String, PkceAuthError> {
         if !self.verify_pass(user, pass).await? {
-            return Err(BeginPkceError::Unauthorized);
+            return Err(PkceAuthError::Unauthorized);
         }
-        if pkce.code_challenge_method != "S256" {
-            return Err(BeginPkceError::UnsupportedMethod);
+        if code_challenge.method != "S256" {
+            return Err(PkceAuthError::UnsupportedMethod);
         }
-        self.pkce.pending.lock().unwrap().insert(pkce, user.into());
-        Ok(())
+
+        let auth_code = Sha256::digest(format!("{user}, {code_challenge}"));
+        let auth_code = BASE64_URL_SAFE.encode(auth_code);
+
+        let pkce = Pkce::new(user.into(), code_challenge);
+        self.pkce
+            .pending
+            .lock()
+            .unwrap()
+            .insert(auth_code.clone(), pkce);
+        Ok(auth_code)
     }
 
-    pub fn verify_pkce(&self, code_verifier: &str) -> Result<String, VerifyPkceError> {
-        let hash = Sha256::digest(code_verifier);
-        let code_challenge = BASE64_URL_SAFE.encode(hash);
-        let pkce = Pkce::new(code_challenge);
-
-        let mut pending = self.pkce.pending.lock().unwrap();
-
-        if let Some(user) = pending.remove(&pkce) {
-            Ok(user)
-        } else {
-            Err(VerifyPkceError::InvalidVerifier)
+    pub fn pkce_token_req(
+        &self,
+        code: &str,
+        code_verifier: &str,
+    ) -> Result<String, PkceTokenError> {
+        let pkce = match self.pkce.pending.lock().unwrap().remove(code) {
+            Some(pkce) => pkce,
+            None => return Err(PkceTokenError::InvalidCode),
+        };
+        if !pkce.valid() {
+            return Err(PkceTokenError::ExpiredCode);
         }
+        if !pkce.code_challenge.verify(code_verifier) {
+            return Err(PkceTokenError::InvalidVerifier);
+        }
+        let token = self.issue_token(&pkce.user);
+        Ok(token)
     }
 }

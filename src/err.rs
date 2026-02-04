@@ -103,7 +103,7 @@ pub enum CheckPermError {
 }
 
 #[derive(Debug, Error)]
-pub enum BeginPkceError {
+pub enum PkceAuthError {
     #[error(transparent)]
     VerifyPass(#[from] VerifyPassError),
     #[error("unauthorized")]
@@ -113,7 +113,11 @@ pub enum BeginPkceError {
 }
 
 #[derive(Debug, Error)]
-pub enum VerifyPkceError {
+pub enum PkceTokenError {
+    #[error("invalid authorization code")]
+    InvalidCode,
+    #[error("expired authorization code")]
+    ExpiredCode,
     #[error("invalid code verifier")]
     InvalidVerifier,
 }
