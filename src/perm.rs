@@ -54,6 +54,18 @@ END;
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Perm(HashSet<String>);
 
+impl From<HashSet<String>> for Perm {
+    fn from(value: HashSet<String>) -> Self {
+        Self(value)
+    }
+}
+
+impl Into<HashSet<String>> for Perm {
+    fn into(self) -> HashSet<String> {
+        self.0
+    }
+}
+
 impl Deref for Perm {
     type Target = HashSet<String>;
 
