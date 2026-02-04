@@ -101,3 +101,19 @@ pub enum CheckPermError {
     #[error(transparent)]
     SetPerm(#[from] SetPermError),
 }
+
+#[derive(Debug, Error)]
+pub enum BeginPkceError {
+    #[error(transparent)]
+    VerifyPass(#[from] VerifyPassError),
+    #[error("unauthorized")]
+    Unauthorized,
+    #[error("support only S256 code challenge method")]
+    UnsupportedMethod,
+}
+
+#[derive(Debug, Error)]
+pub enum VerifyPkceError {
+    #[error("invalid code verifier")]
+    InvalidVerifier,
+}

@@ -19,3 +19,4 @@ base64 = "0.22.1"
 rust-argon2 = "3.0.0"
 tracing = "0.1.44"
 serde = { version = "1.0.228", features = ["derive"], optional = true }
+sha2 = "0.10.9"

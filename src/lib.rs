@@ -1,6 +1,7 @@
 pub mod err;
 pub mod pass;
 pub mod perm;
+pub mod pkce;
 pub mod prelude;
 pub mod token;
 pub mod user;
@@ -13,6 +14,8 @@ use token::TokenModule;
 use tracing::{info, trace};
 
 pub use prelude::*;
+
+use crate::pkce::PkceModule;
 
 fn rand_buf<const N: usize>() -> [u8; N] {
     let mut buf = [0u8; N];
@@ -44,6 +47,7 @@ pub struct Basileus {
     db: SqlitePool,
     /// Token management module.
     token: TokenModule,
+    pkce: PkceModule,
 }
 
 /// Initialize the database.
@@ -79,6 +83,7 @@ impl Basileus {
             cfg,
             db,
             token: TokenModule::new(),
+            pkce: PkceModule::new(),
         })
     }
 
