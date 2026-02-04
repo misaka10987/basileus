@@ -1,7 +1,6 @@
 use crate::{
     Basileus,
     err::{CheckPermError, GetPermError, GivePermError, RevokePermError, SetPermError},
-    user::UserManage,
 };
 use sqlx::{query, query_as};
 use std::{
@@ -126,36 +125,20 @@ impl ToString for Perm {
     }
 }
 
-#[allow(async_fn_in_trait)]
-pub trait PermManage {
+impl Basileus {
     /// Get permissions the user holds, i.e. group names.
-    async fn get_perm(&self, user: &str) -> Result<Perm, GetPermError>;
-    /// Check if the user has specified permission.
-    async fn check_perm(&self, user: &str, perm: &Perm) -> Result<bool, CheckPermError>;
-    /// Sets a user's permission.
-    async fn set_perm(&self, user: &str, perm: &Perm) -> Result<(), SetPermError>;
-    /// Gives new permissions to specified user.
-    async fn give_perm(&self, user: &str, perm: &Perm) -> Result<(), GivePermError>;
-    /// Revoke a user's certain permissions.
-    /// This does not result in an error if the permission does not currently exist.
-    async fn revoke_perm(&self, user: &str, perm: &Perm) -> Result<(), RevokePermError>;
-}
-
-impl<T> PermManage for T
-where
-    T: AsRef<Basileus> + UserManage,
-{
-    async fn get_perm(&self, user: &str) -> Result<Perm, GetPermError> {
+    pub async fn get_perm(&self, user: &str) -> Result<Perm, GetPermError> {
         if !self.exist_user(user).await? {
             return Err(GetPermError::UserNotExist(user.into()));
         }
         let query = query_as("SELECT grp FROM perm WHERE user = ?").bind(user);
-        let (res,): (String,) = query.fetch_one(&self.as_ref().db).await?;
+        let (res,): (String,) = query.fetch_one(&self.db).await?;
         let perm = res.into();
         Ok(perm)
     }
 
-    async fn check_perm(&self, user: &str, req: &Perm) -> Result<bool, CheckPermError> {
+    /// Check if the user has specified permission.
+    pub async fn check_perm(&self, user: &str, req: &Perm) -> Result<bool, CheckPermError> {
         if !self.exist_user(user).await? {
             return Err(CheckPermError::UserNotExist(user.into()));
         }
@@ -163,7 +146,8 @@ where
         Ok(perm >= *req)
     }
 
-    async fn set_perm(&self, user: &str, perm: &Perm) -> Result<(), SetPermError> {
+    /// Sets a user's permission.
+    pub async fn set_perm(&self, user: &str, perm: &Perm) -> Result<(), SetPermError> {
         if !self.exist_user(user).await? {
             return Err(SetPermError::UserNotExist(user.into()));
         }
@@ -171,11 +155,12 @@ where
         let query = query("INSERT OR REPLACE INTO perm (user, grp) VALUES (?, ?);")
             .bind(user)
             .bind(grp);
-        query.execute(&self.as_ref().db).await?;
+        query.execute(&self.db).await?;
         Ok(())
     }
 
-    async fn give_perm(&self, user: &str, perm: &Perm) -> Result<(), GivePermError> {
+    /// Gives new permissions to specified user.
+    pub async fn give_perm(&self, user: &str, perm: &Perm) -> Result<(), GivePermError> {
         if !self.exist_user(user).await? {
             return Err(GivePermError::UserNotExist(user.into()));
         }
@@ -185,7 +170,9 @@ where
         Ok(())
     }
 
-    async fn revoke_perm(&self, user: &str, perm: &Perm) -> Result<(), RevokePermError> {
+    /// Revoke a user's certain permissions.
+    /// This does not result in an error if the permission does not currently exist.
+    pub async fn revoke_perm(&self, user: &str, perm: &Perm) -> Result<(), RevokePermError> {
         if !self.exist_user(user).await? {
             return Err(RevokePermError::UserNotExist(user.into()));
         }

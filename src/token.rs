@@ -21,28 +21,12 @@ impl TokenModule {
     }
 }
 
-pub trait TokenManage {
+impl Basileus {
     /// Issue a new token to the specified user.
-    fn issue_token(&self, user: &str) -> String;
-    /// Invalidate a token.
-    fn invalidate_token(&self, token: &str);
-    /// Invalidate all tokens related to `user`.
-    fn invalidate_user_token(&self, user: &str);
-    /// Make all tokens older than `duration` expire.
-    fn expire_token(&self, duration: Duration);
-    /// Verify token, return the user it belongs to if successful.
-    fn verify_token(&self, token: &str) -> Option<String>;
-}
-
-impl<T> TokenManage for T
-where
-    T: AsRef<Basileus>,
-{
-    fn issue_token(&self, user: &str) -> String {
+    pub fn issue_token(&self, user: &str) -> String {
         let buf = rand_buf::<64>();
         let token = BASE64_STANDARD.encode(buf);
-        self.as_ref()
-            .token
+        self.token
             .store
             .write()
             .unwrap()
@@ -51,14 +35,15 @@ where
         token
     }
 
-    fn invalidate_token(&self, token: &str) {
-        self.as_ref().token.store.write().unwrap().remove(token);
+    /// Invalidate a token.
+    pub fn invalidate_token(&self, token: &str) {
+        self.token.store.write().unwrap().remove(token);
         trace!("invalidated token '{}'", token);
     }
 
-    fn invalidate_user_token(&self, user: &str) {
-        self.as_ref()
-            .token
+    /// Invalidate all tokens related to `user`.
+    pub fn invalidate_user_token(&self, user: &str) {
+        self.token
             .store
             .write()
             .unwrap()
@@ -66,8 +51,9 @@ where
         trace!("invalidated user session '{user}'")
     }
 
-    fn expire_token(&self, duration: Duration) {
-        let mut token = self.as_ref().token.store.write().unwrap();
+    /// Make all tokens older than `duration` expire.
+    pub fn expire_token(&self, duration: Duration) {
+        let mut token = self.token.store.write().unwrap();
         let prev = token.len();
         token.retain(|_, (_, time)| {
             SystemTime::now()
@@ -78,8 +64,9 @@ where
         trace!("expired {diff} tokens");
     }
 
-    fn verify_token(&self, token: &str) -> Option<String> {
-        let map = self.as_ref().token.store.read().unwrap();
+    /// Verify token, return the user it belongs to if successful.
+    pub fn verify_token(&self, token: &str) -> Option<String> {
+        let map = self.token.store.read().unwrap();
         let res = map.get(token).map(|(user, _)| user.clone());
         if let Some(user) = &res {
             trace!("authorized {user} by token")

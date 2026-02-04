@@ -20,29 +20,16 @@ CREATE TABLE IF NOT EXISTS user (
 CREATE INDEX IF NOT EXISTS idx_user_user ON user (user);
 "#;
 
-#[allow(async_fn_in_trait)]
-pub trait UserManage {
+impl Basileus {
     /// Check whether a user currently exists.
-    async fn exist_user(&self, user: &str) -> Result<bool, sqlx::error::Error>;
-
-    /// Create a new user.
-    async fn create_user(&self, user: &str) -> Result<(), CreateUserError>;
-
-    /// Delete a user.
-    async fn delete_user(&self, user: &str) -> Result<(), DeleteUserError>;
-}
-
-impl<T> UserManage for T
-where
-    T: AsRef<Basileus>,
-{
-    async fn exist_user(&self, user: &str) -> Result<bool, sqlx::error::Error> {
+    pub async fn exist_user(&self, user: &str) -> Result<bool, sqlx::error::Error> {
         let query = query_as("SELECT EXISTS(SELECT 1 FROM user WHERE user = ?)").bind(user);
-        let (res,): (i32,) = query.fetch_one(&self.as_ref().db).await?;
+        let (res,): (i32,) = query.fetch_one(&self.db).await?;
         Ok(res == 1)
     }
 
-    async fn create_user(&self, user: &str) -> Result<(), CreateUserError> {
+    /// Create a new user.
+    pub async fn create_user(&self, user: &str) -> Result<(), CreateUserError> {
         if self.exist_user(user).await? {
             return Err(CreateUserError::UserAlreadyExist(user.into()));
         }
@@ -50,17 +37,18 @@ where
             return Err(CreateUserError::InvalidName(user.into()));
         }
         let q = query("INSERT INTO user (user) VALUES (?);").bind(user);
-        q.execute(&self.as_ref().db).await?;
+        q.execute(&self.db).await?;
         info!("created user {user}");
         Ok(())
     }
 
-    async fn delete_user(&self, user: &str) -> Result<(), DeleteUserError> {
+    /// Delete a user.
+    pub async fn delete_user(&self, user: &str) -> Result<(), DeleteUserError> {
         if !self.exist_user(user).await? {
             return Err(DeleteUserError::UserNotExist(user.into()));
         }
         let query = query("DELETE FROM user WHERE user = ?").bind(user);
-        query.execute(&self.as_ref().db).await?;
+        query.execute(&self.db).await?;
         info!("deleted user {user}");
         Ok(())
     }
