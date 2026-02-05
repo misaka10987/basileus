@@ -110,6 +110,8 @@ pub enum PkceAuthError {
     Unauthorized,
     #[error("support only S256 code challenge method")]
     UnsupportedMethod,
+    #[error("insecure `plain` transformation method is disallowed")]
+    InsecurePlain,
 }
 
 #[derive(Debug, Error)]

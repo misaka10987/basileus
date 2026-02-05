@@ -1,7 +1,8 @@
-use std::{collections::HashMap, fmt::Display, sync::Mutex, time::Instant};
+use std::{collections::HashMap, fmt::Display, str::FromStr, sync::Mutex, time::Instant};
 
 use base64::{Engine, prelude::BASE64_URL_SAFE};
 use sha2::{Digest, Sha256};
+use tracing::warn;
 
 use crate::{
     Basileus,
@@ -12,12 +13,47 @@ use crate::{
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct CodeChallenge {
-    /// Base64URL-encoded [code challenge](https://datatracker.ietf.org/doc/html/rfc7636#section-4.2).
+    /// The base64URL-encoded `code_challenge`.
     #[cfg_attr(feature = "serde", serde(rename = "code_challenge"))]
     pub challenge: String,
-    /// The code challenge method, **must** be "S256".
+    /// The `code_challenge_method`.
     #[cfg_attr(feature = "serde", serde(rename = "code_challenge_method"))]
-    pub method: String,
+    pub method: CodeChallengeMethod,
+}
+
+/// The PKCE code challenge method, as defined in [RFC 7636](https://datatracker.ietf.org/doc/html/rfc7636#section-4.2).
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum CodeChallengeMethod {
+    /// SHA256 transformation.
+    #[cfg_attr(feature = "serde", serde(rename = "S256"))]
+    S256,
+    /// Plain (`code_challenge = code_verifier`) transformation.
+    #[cfg_attr(feature = "serde", serde(rename = "plain"))]
+    Plain,
+}
+
+impl Display for CodeChallengeMethod {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CodeChallengeMethod::S256 => write!(f, "S256"),
+            CodeChallengeMethod::Plain => write!(f, "plain"),
+        }
+    }
+}
+
+impl FromStr for CodeChallengeMethod {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "S256" => Ok(CodeChallengeMethod::S256),
+            "plain" => Ok(CodeChallengeMethod::Plain),
+            _ => Err(format!(
+                "invalid code challenge method: {s}, must be either 'S256' or 'plain'"
+            )),
+        }
+    }
 }
 
 impl CodeChallenge {
@@ -25,15 +61,20 @@ impl CodeChallenge {
     pub fn new(challenge: String) -> Self {
         Self {
             challenge,
-            method: "S256".into(),
+            method: CodeChallengeMethod::S256,
         }
     }
 
     /// Verify the `code_verifier` by checking if the hash matches the stored `code_challenge`.
     pub fn verify(&self, code_verifier: &str) -> bool {
-        let hash = Sha256::digest(code_verifier);
-        let encoded = BASE64_URL_SAFE.encode(hash);
-        self.challenge == encoded
+        match self.method {
+            CodeChallengeMethod::S256 => {
+                let hash = Sha256::digest(code_verifier);
+                let encoded = BASE64_URL_SAFE.encode(hash);
+                self.challenge == encoded
+            }
+            CodeChallengeMethod::Plain => self.challenge == code_verifier,
+        }
     }
 }
 
@@ -70,14 +111,44 @@ impl Pkce {
     }
 }
 
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", serde_inline_default::serde_inline_default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct PkceConfig {
+    /// Whether to allow the `plain` transformation method for PKCE code challenges.
+    ///
+    /// **This is a security vulnerability and should always be avoided.**
+    #[cfg(feature = "serde")]
+    #[serde_inline_default(false)]
+    pub allow_plain: bool,
+    /// Whether to allow the `plain` transformation method for PKCE code challenges.
+    ///
+    /// **This is a security vulnerability and should always be avoided.**
+    #[cfg(not(feature = "serde"))]
+    pub allow_plain: bool,
+}
+
+impl Default for PkceConfig {
+    fn default() -> Self {
+        Self { allow_plain: false }
+    }
+}
+
 pub struct PkceModule {
+    pub config: PkceConfig,
     /// Map from PKCE challenges to their beloinging users.
     pending: Mutex<HashMap<String, Pkce>>,
 }
 
 impl PkceModule {
-    pub fn new() -> Self {
+    pub fn new(config: PkceConfig) -> Self {
+        if config.allow_plain {
+            warn!(
+                "allowing `plain` transformation method for PKCE. This is a security vulnerability"
+            );
+        }
         Self {
+            config,
             pending: Mutex::new(HashMap::new()),
         }
     }
@@ -93,11 +164,12 @@ impl Basileus {
         pass: &str,
         code_challenge: CodeChallenge,
     ) -> Result<String, PkceAuthError> {
+        if code_challenge.method == CodeChallengeMethod::Plain && !self.pkce.config.allow_plain {
+            return Err(PkceAuthError::InsecurePlain);
+        }
+
         if !self.verify_pass(user, pass).await? {
             return Err(PkceAuthError::Unauthorized);
-        }
-        if code_challenge.method != "S256" {
-            return Err(PkceAuthError::UnsupportedMethod);
         }
 
         let auth_code = Sha256::digest(format!("{user}, {code_challenge}"));

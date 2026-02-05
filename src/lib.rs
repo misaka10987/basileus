@@ -15,7 +15,7 @@ use tracing::{info, trace};
 
 pub use prelude::*;
 
-use crate::pkce::PkceModule;
+use crate::pkce::{PkceConfig, PkceModule};
 
 fn rand_buf<const N: usize>() -> [u8; N] {
     let mut buf = [0u8; N];
@@ -28,13 +28,19 @@ fn rand_buf<const N: usize>() -> [u8; N] {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Config {
     /// Path to the SQLite storage.
-    pub db_path: PathBuf,
+    #[cfg_attr(feature = "serde", serde(rename = "database-path"))]
+    pub db: PathBuf,
+    /// PKCE configuration.
+    #[cfg_attr(feature = "serde", serde(rename = "pkce"))]
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub pkce: PkceConfig,
 }
 
 impl Default for Config {
     fn default() -> Self {
         Self {
-            db_path: "./basileus.db".into(),
+            db: "./basileus.db".into(),
+            pkce: Default::default(),
         }
     }
 }
@@ -42,7 +48,7 @@ impl Default for Config {
 /// Entry point for the library.
 pub struct Basileus {
     /// Configurations.
-    pub cfg: Config,
+    pub config: Config,
     /// Database connection.
     db: SqlitePool,
     /// Token management module.
@@ -68,22 +74,23 @@ CREATE INDEX IF NOT EXISTS idx_token_user ON token (user);
 
 impl Basileus {
     /// Initialize the library, creating the database if missing.
-    pub async fn new(cfg: Config) -> Result<Self, sqlx::error::Error> {
+    pub async fn new(config: Config) -> Result<Self, sqlx::error::Error> {
         let opt = SqliteConnectOptions::default()
-            .filename(&cfg.db_path)
+            .filename(&config.db)
             .create_if_missing(true);
         let db = SqlitePool::connect_with(opt).await?;
-        info!("connected to {:?}", cfg.db_path);
+        info!("connected to {:?}", config.db);
         query(user::DB_INIT).execute(&db).await?;
         query(pass::DB_INIT).execute(&db).await?;
         query(perm::DB_INIT).execute(&db).await?;
         query(DB_INIT).execute(&db).await?;
         trace!("database initialized");
+        let pkce = PkceModule::new(config.pkce.clone());
         Ok(Self {
-            cfg,
+            config,
             db,
             token: TokenModule::new(),
-            pkce: PkceModule::new(),
+            pkce,
         })
     }
 
